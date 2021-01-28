@@ -176,7 +176,7 @@ inline void String_append_c(String* string, char c) {
   string->length = length + 1;
 }
 inline void String_append(String* string, String* s) {
-  return String_append_cstr(string, String_cstr(s));
+  String_append_cstr(string, String_cstr(s));
 }
 inline void String_append_cstr(String* string, char* s) {
   for (int i = 0; i < strlen(s); ++i) {
