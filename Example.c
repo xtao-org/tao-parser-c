@@ -10,7 +10,7 @@ int main(void)
   char* output = String_cstr(unparsed);
   assert(strcmp(input, output) == 0);
   printf("%s\n", output);
-  String_free(unparsed);
+  String_free(&unparsed);
   Tao_free(tao);
   return 0;
 }

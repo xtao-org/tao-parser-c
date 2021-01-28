@@ -3,13 +3,19 @@
 
 typedef int Bool;
 
+extern inline void freeptr(void** ptr) {
+  void* value = *ptr;
+  free(value);
+  ptr = NULL;
+}
+
 typedef struct Node Node;
 struct Node {
   Node* next;
   void* value;
 };
 Node* Node_make(void* value);
-void Node_free(Node* node, void (*value_free)(void*));
+void Node_free(Node** nodeptr, void (*value_free)(void**));
 void Node_bind(Node* node, Node* next);
 Bool Node_isValid(Node* node);
 void* Node_value(Node* node);
@@ -19,7 +25,7 @@ typedef struct {
   Node* head;
 } Stack;
 Stack* Stack_make();
-void Stack_free(Stack* stack);
+void Stack_free(Stack** stackptr);
 void Stack_push(Stack* stack, void* value);
 void* Stack_pop(Stack* stack);
 Bool Stack_empty(Stack* stack);
@@ -29,7 +35,7 @@ typedef struct {
   Node* tail;
 } List;
 List* List_make();
-void List_free(List* list, void (*value_free)(void*));
+void List_free(List** listptr, void (*value_free)(void**));
 void List_add(List* list, void* value);
 Node* List_head(List* list);
 
@@ -39,7 +45,7 @@ typedef struct {
   int length;
 } String;
 String* String_make();
-void String_free(String* string);
+void String_free(String** stringptr);
 String* String_make_c(char c);
 void String_append(String* string, String* s);
 void String_append_c(String* string, char c);
@@ -52,10 +58,11 @@ inline Node* Node_make(void* value) {
   node->next = NULL;
   return node;
 }
-inline void Node_free(Node* node, void (*value_free)(void*)) {
-  value_free(node->value);
+inline void Node_free(Node** nodeptr, void (*value_free)(void**)) {
+  Node* node = *nodeptr;
+  value_free(&node->value);
   free(node);
-  node = NULL;
+  nodeptr = NULL;
 }
 inline void Node_bind(Node* node, Node* next) {
   node->next = next;
@@ -76,15 +83,16 @@ inline List* List_make() {
   list->tail = NULL;
   return list;
 }
-inline void List_free(List* list, void (*value_free)(void*)) {
+inline void List_free(List** listptr, void (*value_free)(void**)) {
+  List* list = *listptr;
   Node* node = list->head;
   while (Node_isValid(node)) {
     Node* next = Node_next(node);
-    Node_free(node, value_free);
+    Node_free(&node, value_free);
     node = next;
   }
   free(list);
-  list = NULL;
+  listptr = NULL;
 }
 inline void List_add(List* list, void* value) {
   Node* node = Node_make(value);
@@ -105,15 +113,16 @@ inline Stack* Stack_make() {
   stack->head = NULL;
   return stack;
 }
-inline void Stack_free(Stack* stack) {
+inline void Stack_free(Stack** stackptr) {
+  Stack* stack = *stackptr;
   Node* node = stack->head;
   if (Node_isValid(node)) {
     Node* next = Node_next(node);
-    Node_free(node, &free);
+    Node_free(&node, &freeptr);
     node = next;
   }
   free(stack);
-  stack = NULL;
+  stackptr = NULL;
 }
 inline void Stack_push(Stack* stack, void* value) {
   Node* node = Node_make(value);
@@ -155,10 +164,11 @@ inline String* String_make() {
   ret->length = 0;
   return ret;
 }
-inline void String_free(String* string) {
+inline void String_free(String** stringptr) {
+  String* string = *stringptr;
   free(string->str);
   free(string);
-  string = NULL;
+  stringptr = NULL;
 }
 inline String* String_make_c(char c) {
   String* ret = String_make();

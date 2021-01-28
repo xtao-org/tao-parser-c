@@ -6,6 +6,7 @@ typedef struct {
   char symbol;
 } Bound;
 Bound* Bound_make(int position, char symbol);
+// todo: Bound_free that zeroes the pointer?
 int Bound_position(Bound* bound);
 char Bound_symbol(Bound* bound);
 
@@ -16,7 +17,7 @@ typedef struct {
   Stack* bounds;
 } Input;
 Input* Input_make(char* str);
-void Input_free(Input* input);
+void Input_free(Input** inputptr);
 Bool Input_done(Input* input);
 Bool Input_at(Input* input, char symbol);
 char Input_next(Input* input);
@@ -30,7 +31,7 @@ typedef struct {
   const char* tag;
 } Tagged;
 const char* Tagged_tag(Tagged* tagged);
-void Tagged_free(Tagged* tagged);
+void Tagged_free(Tagged** taggedptr);
 String* Tagged_unparse(Tagged* value);
 
 typedef struct {
@@ -49,7 +50,7 @@ typedef struct {
   Tao* tao;
 } Tree;
 Tree* Tree_make(Tao* tao);
-void Tree_free(Tree* tree);
+void Tree_free(Tree** treeptr);
 Tagged* Tree_parse(Input* input);
 
 typedef struct {
@@ -57,7 +58,7 @@ typedef struct {
   char* note;
 } Note;
 Note* Note_make(char* note);
-void Note_free(Note* note);
+void Note_free(Note** noteptr);
 Tagged* Note_parse(Input* input);
 
 typedef struct {
@@ -65,7 +66,7 @@ typedef struct {
   char op;
 } Op;
 Op* Op_make(char op);
-void Op_free(Op* op);
+void Op_free(Op** opptr);
 Tagged* Op_parse(Input* input);
 
 typedef struct {
@@ -94,11 +95,12 @@ inline Input* Input_make(char* str) {
   ret->bounds = Stack_make();
   return ret;
 }
-inline void Input_free(Input* input) {
+inline void Input_free(Input** inputptr) {
+  Input* input = *inputptr;
   // free(input->str);
-  Stack_free(input->bounds);
+  Stack_free(&input->bounds);
   free(input);
-  input = NULL;
+  inputptr = NULL;
 }
 inline Bool Input_done(Input* input) {
   return input->position >= input->length;
@@ -141,18 +143,19 @@ inline Bool Input_meta(Input* input) {
 inline const char* Tagged_tag(Tagged* tagged) {
   return tagged->tag;
 }
-inline void Tagged_free(Tagged* tagged) {
+inline void Tagged_free(Tagged** taggedptr) {
+  Tagged* tagged = *taggedptr;
   const char* tag = Tagged_tag(tagged);
   if (strcmp(tag, "note") == 0) {
-    Note_free((Note*)tagged);
+    Note_free((Note**)taggedptr);
     return;
   }
   if (strcmp(tag, "op") == 0) {
-    Op_free((Op*)tagged);
+    Op_free((Op**)taggedptr);
     return;
   }
   if (strcmp(tag, "tree") == 0) {
-    Tree_free((Tree*)tagged);
+    Tree_free((Tree**)taggedptr);
     return;
   }
   printf("Unrecognized tag: %s", tag);
@@ -177,7 +180,7 @@ inline String* Tagged_unparse(Tagged* value) {
     String* str = String_make_c('[');
     String* unparsed = Tao_unparse(tree->tao);
     String_append(str, unparsed);
-    String_free(unparsed);
+    String_free(&unparsed);
     String_append_c(str, ']');
     return str;
   }
@@ -192,14 +195,14 @@ inline Tao* Tao_make() {
   return ret;
 }
 inline void Tao_free(Tao* tao) {
-  List_free(tao->parts, (void (*)(void*))&Tagged_free);
+  List_free(&tao->parts, (void (*)(void**))&Tagged_free);
   free(tao);
   tao = NULL;
 }
 inline Tao* Tao_parse_cstr(char* str) {
   Input* input = Input_make(str);
   Tao* ret = Tao_parse(input);
-  Input_free(input);
+  Input_free(&input);
   return ret;
 }
 inline Tao* Tao_parse(Input* input) {
@@ -227,7 +230,7 @@ inline String* Tao_unparse(Tao* tao) {
   while (Node_isValid(node)) {
     String* unparsed = Tagged_unparse((Tagged*)Node_value(node));
     String_append(str, unparsed);
-    String_free(unparsed);
+    String_free(&unparsed);
     node = Node_next(node);
   }
   return str;
@@ -239,10 +242,11 @@ inline Tree* Tree_make(Tao* tao) {
   ret->tao = tao;
   return ret;
 }
-inline void Tree_free(Tree* tree) {
+inline void Tree_free(Tree** treeptr) {
+  Tree* tree = *treeptr;
   Tao_free(tree->tao);
   free(tree);
-  tree = NULL;
+  treeptr = NULL;
 }
 inline Tagged* Tree_parse(Input* input) {
   if (Input_at(input, '[')) {
@@ -262,9 +266,10 @@ inline Op* Op_make(char op) {
   ret->op = op;
   return ret;
 }
-inline void Op_free(Op* op) {
+inline void Op_free(Op** opptr) {
+  Op* op = *opptr;
   free(op);
-  op = NULL;
+  opptr = NULL;
 }
 inline Tagged* Op_parse(Input* input) {
   if (Input_at(input, '`')) {
@@ -281,10 +286,11 @@ inline Note* Note_make(char* note) {
   ret->note = note;
   return ret;
 }
-inline void Note_free(Note* note) {
+inline void Note_free(Note** noteptr) {
+  Note* note = *noteptr;
   free(note->note);
   free(note);
-  note = NULL;
+  noteptr = NULL;
 }
 inline Tagged* Note_parse(Input* input) {
   if (Input_meta(input)) Input_error(input, "note");
@@ -292,7 +298,7 @@ inline Tagged* Note_parse(Input* input) {
   while (1) {
     if (Input_meta(input) || Input_done(input)) {
       char* str = String_to_cstr(note);
-      String_free(note);
+      String_free(&note);
       return (Tagged*)Note_make(str);
     }
     String_append_c(note, Input_next(input));
