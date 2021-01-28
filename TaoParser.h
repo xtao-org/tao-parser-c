@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include "lib.h"
 
-// todo: check if more getters needed & implement if so
-// todo: clean up, organize; perhaps extract decls to header file; +separate List, Node, Stack, String
-
 typedef struct {
   int position;
   char symbol;
@@ -227,7 +224,7 @@ inline String* Tao_unparse(Tao* tao) {
   String* str = String_make();
   List* parts = tao->parts;
   Node* node = List_head(parts);
-  while (node != NULL) {
+  while (Node_isValid(node)) {
     String* unparsed = Tagged_unparse((Tagged*)Node_value(node));
     String_append(str, unparsed);
     String_free(unparsed);
