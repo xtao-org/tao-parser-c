@@ -6,7 +6,6 @@ typedef struct {
   char symbol;
 } Bound;
 Bound* Bound_make(int position, char symbol);
-// todo: Bound_free that zeroes the pointer?
 int Bound_position(Bound* bound);
 char Bound_symbol(Bound* bound);
 
@@ -39,7 +38,7 @@ typedef struct {
   List* parts;
 } Tao;
 Tao* Tao_make();
-void Tao_free(Tao* tao);
+void Tao_free(Tao** taoptr);
 Tao* Tao_parse_cstr(char* str);
 Tao* Tao_parse(Input* input);
 void Tao_push(Tao* tao, void* part);
@@ -194,10 +193,11 @@ inline Tao* Tao_make() {
   ret->parts = List_make();
   return ret;
 }
-inline void Tao_free(Tao* tao) {
+inline void Tao_free(Tao** taoptr) {
+  Tao* tao = *taoptr;
   List_free(&tao->parts, (void (*)(void**))&Tagged_free);
   free(tao);
-  tao = NULL;
+  taoptr = NULL;
 }
 inline Tao* Tao_parse_cstr(char* str) {
   Input* input = Input_make(str);
@@ -244,7 +244,7 @@ inline Tree* Tree_make(Tao* tao) {
 }
 inline void Tree_free(Tree** treeptr) {
   Tree* tree = *treeptr;
-  Tao_free(tree->tao);
+  Tao_free(&tree->tao);
   free(tree);
   treeptr = NULL;
 }
