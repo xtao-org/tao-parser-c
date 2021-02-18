@@ -6,7 +6,7 @@ The implementation can be used as a reference for other parsers, in particular i
 
 # Interactive version
 
-Interactive version of the parser in JavaScript can be to tried at [tree-annotation.org](https://tree-annotation.org/parser.html).
+Interactive version of the parser in JavaScript can be tried at [tree-annotation.org](https://tree-annotation.org/parser.html).
 
 # Usage
 
