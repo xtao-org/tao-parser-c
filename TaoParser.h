@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "lib.h"
 
 typedef struct {
@@ -26,52 +27,43 @@ void Input_unbound(Input* input);
 Bool Input_atBound(Input* input);
 Bool Input_meta(Input* input);
 
-typedef struct {
-  const char* tag;
-} Tagged;
-const char* Tagged_tag(Tagged* tagged);
-void Tagged_free(Tagged** taggedptr);
-String* Tagged_unparse(Tagged* value);
+typedef Plist Part;
+void Part_free(Part** partptr);
+String* Part_unparse(Part* part);
 
-typedef struct {
-  const char* tag;
-  List* parts;
-} Tao;
+typedef Plist Tao;
 Tao* Tao_make();
+List* Tao_tao(Tao* tao);
 void Tao_free(Tao** taoptr);
-Tao* Tao_parse_cstr(char* str);
-Tao* Tao_parse(Input* input);
+List* Tao_parse_cstr(char* str);
+List* Tao_parse(Input* input);
 void Tao_push(Tao* tao, void* part);
 String* Tao_unparse(Tao* tao);
 
-typedef struct {
-  const char* tag;
-  Tao* tao;
-} Tree;
+typedef Plist Tree;
 Tree* Tree_make(Tao* tao);
+Tao* Tree_tree(Tree* tree);
 void Tree_free(Tree** treeptr);
-Tagged* Tree_parse(Input* input);
+Bool Tree_isTree(Plist* tree);
+Part* Tree_parse(Input* input);
 
-typedef struct {
-  const char* tag;
-  char* note;
-} Note;
+typedef Plist Note;
 Note* Note_make(char* note);
+char* Note_note(Note* note);
 void Note_free(Note** noteptr);
-Tagged* Note_parse(Input* input);
+Bool Note_isNote(Plist* tree);
+Part* Note_parse(Input* input);
 
-typedef struct {
-  const char* tag;
-  char op;
-} Op;
+typedef Plist Op;
 Op* Op_make(char op);
+char* Op_op(Op* op);
 void Op_free(Op** opptr);
-Tagged* Op_parse(Input* input);
+Bool Op_isOp(Plist* list);
+Part* Op_parse(Input* input);
 
-typedef struct {
-  const char* tag;
-} Other;
-Other* Other_make();
+typedef char Other;
+Other* Other_get();
+Bool Other_isOther(void* value);
 
 inline Bound* Bound_make(int position, char symbol) {
   Bound* bound = (Bound*)malloc(sizeof *bound);
@@ -139,63 +131,61 @@ inline Bool Input_meta(Input* input) {
   return Input_at(input, '[') || Input_at(input, '`') || Input_at(input, ']');
 }
 
-inline const char* Tagged_tag(Tagged* tagged) {
-  return tagged->tag;
-}
-inline void Tagged_free(Tagged** taggedptr) {
-  Tagged* tagged = *taggedptr;
-  const char* tag = Tagged_tag(tagged);
-  if (strcmp(tag, "note") == 0) {
-    Note_free((Note**)taggedptr);
+inline void Part_free(Part** partptr) {
+  Part* part = *partptr;
+  if (Note_isNote(part)) {
+    Note_free((Note**)partptr);
     return;
   }
-  if (strcmp(tag, "op") == 0) {
-    Op_free((Op**)taggedptr);
+  if (Op_isOp(part)) {
+    Op_free((Op**)partptr);
     return;
   }
-  if (strcmp(tag, "tree") == 0) {
-    Tree_free((Tree**)taggedptr);
+  if (Tree_isTree(part)) {
+    Tree_free((Tree**)partptr);
     return;
   }
-  printf("Unrecognized tag: %s", tag);
+  printf("Unrecognized part: %p", part);
   exit(1);
 }
-inline String* Tagged_unparse(Tagged* value) {
-  const char* tag = Tagged_tag(value);
-  if (strcmp(tag, "note") == 0) {
-    Note* note = (Note*)value;
+inline String* Part_unparse(Part* part) {
+  if (Note_isNote(part)) {
+    Note* note = (Note*)part;
     String* ret = String_make();
-    String_append_cstr(ret, note->note);
+    String_append_cstr(ret, Note_note(note));
     return ret;
   }
-  if (strcmp(tag, "op") == 0) {
-    Op* op = (Op*)value;
+  if (Op_isOp(part)) {
+    Op* op = (Op*)part;
     String* ret = String_make_c('`');
-    String_append_c(ret, op->op);
+    String_append_cstr(ret, Op_op(op));
     return ret;
   }
-  if (strcmp(tag, "tree") == 0) {
-    Tree* tree = (Tree*)value;
+  if (Tree_isTree(part)) {
+    Tree* tree = (Tree*)part;
     String* str = String_make_c('[');
-    String* unparsed = Tao_unparse(tree->tao);
+    String* unparsed = Tao_unparse(Tree_tree(tree));
     String_append(str, unparsed);
     String_free(&unparsed);
     String_append_c(str, ']');
     return str;
   }
-  printf("Unrecognized tag: %s", tag);
+  printf("Unrecognized part: %p", part);
   exit(1);
 }
 
 inline Tao* Tao_make() {
-  Tao* ret = (Tao*)malloc(sizeof *ret);
-  ret->tag = "tao";
-  ret->parts = List_make();
+  Tao* ret = Plist_make();
+  Plist_set(ret, "tao", List_make());
   return ret;
+}
+inline List* Tao_tao(Tao* tao) {
+  return (List*)Plist_get(tao, "tao");
 }
 inline void Tao_free(Tao** taoptr) {
   Tao* tao = *taoptr;
-  List_free(&tao->parts, (void (*)(void**))&Tagged_free);
+  List* parts = Tao_tao(tao);
+  List_free(&parts, (void (*)(void**))&Part_free);
   free(tao);
   taoptr = NULL;
 }
@@ -209,10 +199,10 @@ inline Tao* Tao_parse(Input* input) {
   Tao* tao = Tao_make();
   while (1) {
     if (Input_atBound(input)) return tao;
-    Tagged* part = Tree_parse(input);
-    if (strcmp(Tagged_tag(part), "other") == 0) {
+    Part* part = Tree_parse(input);
+    if (Other_isOther(part)) {
       part = Op_parse(input);
-      if (strcmp(Tagged_tag(part), "other") == 0) {
+      if (Other_isOther(part)) {
         part = Note_parse(input);
       }
     }
@@ -221,14 +211,14 @@ inline Tao* Tao_parse(Input* input) {
   return tao;
 }
 inline void Tao_push(Tao* tao, void* part) {
-  List_add(tao->parts, part);
+  List_add(Tao_tao(tao), part);
 }
 inline String* Tao_unparse(Tao* tao) {
   String* str = String_make();
-  List* parts = tao->parts;
+  List* parts = Tao_tao(tao);
   Node* node = List_head(parts);
   while (Node_isValid(node)) {
-    String* unparsed = Tagged_unparse((Tagged*)Node_value(node));
+    String* unparsed = Part_unparse((List*)Node_value(node));
     String_append(str, unparsed);
     String_free(&unparsed);
     node = Node_next(node);
@@ -237,81 +227,106 @@ inline String* Tao_unparse(Tao* tao) {
 }
 
 inline Tree* Tree_make(Tao* tao) {
-  Tree* ret = (Tree*)malloc(sizeof *ret);
-  ret->tag = "tree";
-  ret->tao = tao;
+  Tao* ret = Plist_make();
+  Plist_set(ret, "tree", tao);
   return ret;
+}
+inline Tao* Tree_tree(Tree* tree) {
+  return (Tao*)Plist_get(tree, "tree");
 }
 inline void Tree_free(Tree** treeptr) {
   Tree* tree = *treeptr;
-  Tao_free(&tree->tao);
+  Tao* tao = Tree_tree(tree);
+  Tao_free(&tao);
   free(tree);
   treeptr = NULL;
 }
-inline Tagged* Tree_parse(Input* input) {
+inline Bool Tree_isTree(Plist* tree) {
+  return Tree_tree(tree) != NULL;
+}
+inline Part* Tree_parse(Input* input) {
   if (Input_at(input, '[')) {
     Input_next(input);
     Input_bound(input, ']');
     Tao* t = Tao_parse(input);
     Input_unbound(input);
     Input_next(input);
-    return (Tagged*)Tree_make(t);
+    return (Part*)Tree_make(t);
   }
-  return (Tagged*)Other_make();
+  return (Part*)Other_get();
 }
 
-inline Op* Op_make(char op) {
-  Op* ret = (Op*)malloc(sizeof *ret);
-  ret->tag = "op";
-  ret->op = op;
+inline Op* Op_make(char ch) {
+  char* op = (char*)malloc(sizeof(char) * 2);
+  op[0] = ch;
+  op[1] = 0;
+  List* ret = Plist_make();
+  Plist_set(ret, "op", op);
   return ret;
+}
+inline char* Op_op(Op* op) {
+  return (char*)Plist_get(op, "op");
 }
 inline void Op_free(Op** opptr) {
   Op* op = *opptr;
+  char* opstr = Op_op(op);
+  free(opstr);
   free(op);
   opptr = NULL;
 }
-inline Tagged* Op_parse(Input* input) {
+inline Bool Op_isOp(Plist* list) {
+  return Op_op(list) != NULL;
+}
+inline Part* Op_parse(Input* input) {
   if (Input_at(input, '`')) {
     Input_next(input);
     if (Input_done(input)) Input_error(input, "op");
-    return (Tagged*)Op_make(Input_next(input));
+    return (Part*)Op_make(Input_next(input));
   }
-  return (Tagged*)Other_make();
+  return (Part*)Other_get();
 }
 
 inline Note* Note_make(char* note) {
-  Note* ret = (Note*)malloc(sizeof *ret);
-  ret->tag = "note";
-  ret->note = note;
+  Note* ret = Plist_make();
+  Plist_set(ret, "note", note);
   return ret;
+}
+inline char* Note_note(Note* note) {
+  return (char*)Plist_get(note, "note");
 }
 inline void Note_free(Note** noteptr) {
   Note* note = *noteptr;
-  free(note->note);
+  char* str = Note_note(note);
+  free(str);
   free(note);
+  // Plist_free...;
   noteptr = NULL;
 }
-inline Tagged* Note_parse(Input* input) {
+inline Bool Note_isNote(Plist* note) {
+  return Note_note(note) != NULL;
+}
+inline Part* Note_parse(Input* input) {
   if (Input_meta(input)) Input_error(input, "note");
   String* note = String_make_c(Input_next(input));
   while (1) {
     if (Input_meta(input) || Input_done(input)) {
       char* str = String_to_cstr(note);
       String_free(&note);
-      return (Tagged*)Note_make(str);
+      return (Part*)Note_make(str);
     }
     String_append_c(note, Input_next(input));
   }
 }
 
-static inline Other* Other_make_once() {
-  Other* ret = (Other*)malloc(sizeof *ret);
-  ret->tag = "other";
+inline Other* Other_get() {
+  static Other* ret = NULL;
+  static const char* Other_str = "other";
+  if (ret == NULL) {
+    Other* ret = (Other*)malloc(sizeof(char) * strlen(Other_str) + 1);
+    ret = strcpy(ret, Other_str);
+  }
   return ret;
 }
-inline Other* Other_make() {
-  static Other* ret = NULL;
-  if (ret == NULL) ret = Other_make_once();
-  return ret;
+inline Bool Other_isOther(void* value) {
+  return Other_get() == value;
 }

@@ -22,6 +22,13 @@ void* Node_value(Node* node);
 Node* Node_next(Node* node);
 
 typedef struct {
+  const char* key;
+  void* value;
+} Prop;
+Prop* Prop_make(const char* key, void* value);
+void Prop_free(Prop** propptr, void (*value_free)(void**));
+
+typedef struct {
   Node* head;
 } Stack;
 Stack* Stack_make();
@@ -38,6 +45,12 @@ List* List_make();
 void List_free(List** listptr, void (*value_free)(void**));
 void List_add(List* list, void* value);
 Node* List_head(List* list);
+
+typedef List Plist;
+#define Plist_make List_make
+#define Plist_free List_free
+void Plist_set(Plist* plist, const char* key, void* value);
+void* Plist_get(Plist* plist, const char* key);
 
 typedef struct {
   char* str;
@@ -75,6 +88,20 @@ inline void* Node_value(Node* node) {
 }
 inline Node* Node_next(Node* node) {
   return node->next;
+}
+
+inline Prop* Prop_make(const char* key, void* value) {
+  Prop* prop = (Prop*)malloc(sizeof *prop);
+  prop->key = key;
+  prop->value = value;
+  return prop;
+}
+inline void Prop_free(Prop** propptr, void (*value_free)(void**)) {
+  Prop* prop = *propptr;
+  // free(prop->key);
+  value_free(&prop->value);
+  free(prop);
+  propptr = NULL;
 }
 
 inline List* List_make() {
@@ -200,4 +227,23 @@ extern inline char* String_to_cstr(String* string) {
 }
 inline char* String_cstr(String* string) {
   return string->str;
+}
+
+inline void Plist_set(Plist* plist, const char* key, void* value) {
+  Prop* prop = Prop_make(key, value);
+  List_add(plist, prop);
+}
+// returns the value of the last prop that has the given key
+inline void* Plist_get(Plist* plist, const char* key) {
+  Node* node = plist->head;
+  void* ret = NULL;
+  while (Node_isValid(node)) {
+    Prop* prop = (Prop*)node->value;
+    if (strcmp(key, prop->key) == 0) {
+      ret = prop->value;
+    }
+    Node* next = Node_next(node);
+    node = next;
+  }
+  return ret;
 }
